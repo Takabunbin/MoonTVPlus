@@ -200,6 +200,8 @@ export async function POST(req: NextRequest) {
     // 获取站点配置
     const adminConfig = await getConfig();
     const siteConfig = adminConfig.SiteConfig;
+    const body = await req.json();
+    const adminOnly = body.adminOnly === true;
 
     // 本地 / localStorage 模式——仅校验固定密码
     if (STORAGE_TYPE === 'localstorage') {
@@ -220,7 +222,7 @@ export async function POST(req: NextRequest) {
         return response;
       }
 
-      const { password } = await req.json();
+      const { password } = body;
       if (typeof password !== 'string') {
         return NextResponse.json({ error: '密码不能为空' }, { status: 400 });
       }
@@ -261,7 +263,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 数据库 / redis 模式——校验用户名并尝试连接数据库
-    const { username, password, turnstileToken } = await req.json();
+    const { username, password, turnstileToken } = body;
 
     if (!username || typeof username !== 'string') {
       return NextResponse.json({ error: '用户名不能为空' }, { status: 400 });
@@ -357,6 +359,11 @@ export async function POST(req: NextRequest) {
         { error: '用户名或密码错误' },
         { status: 401 }
       );
+    }
+
+    if (adminOnly && userRole !== 'owner' && userRole !== 'admin') {
+      recordLoginFailure(clientIp);
+      return NextResponse.json({ error: '仅限管理员登录' }, { status: 403 });
     }
 
     recordLoginSuccess(clientIp);
