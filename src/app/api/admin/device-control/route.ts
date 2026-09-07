@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     if (operatorRole === 'owner') {
       for (const device of [...approved, ...pending]) allowedUsernames.add(device.username);
     } else {
-      const usernames = [...new Set([...approved, ...pending].map((device) => device.username))];
+      const usernames = Array.from(new Set([...approved, ...pending].map((device) => device.username)));
       const roles = await Promise.all(usernames.map(async (target) => ({
         target,
         role: await getUserRole(target),
