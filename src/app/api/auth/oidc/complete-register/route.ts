@@ -5,6 +5,7 @@ import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { setDeviceIdCookie } from '@/lib/device-id';
 import { checkOidcDeviceApproval } from '@/lib/oidc-device-approval';
+import { isValidOidcUsername } from '@/lib/oidc-registration';
 import {
   generateRefreshToken,
   generateTokenId,
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证用户名格式
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+    if (!isValidOidcUsername(username)) {
       return NextResponse.json(
         { error: '用户名只能包含字母、数字、下划线，长度3-20位' },
         { status: 400 }

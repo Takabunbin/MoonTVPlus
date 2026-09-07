@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { setDeviceIdCookie } from '@/lib/device-id';
+import { autoRegisterOidcUser } from '@/lib/oidc-auto-register';
 import { checkOidcDeviceApproval } from '@/lib/oidc-device-approval';
 import {
   generateRefreshToken,
@@ -216,8 +217,16 @@ export async function GET(request: NextRequest) {
     }
 
     // 检查用户是否已存在(通过OIDC sub查找)
-    const username = await db.getUserByOidcSub(oidcSub);
+    let username = await db.getUserByOidcSub(oidcSub);
     let userRole: 'owner' | 'admin' | 'user' = 'user';
+
+    if (!username && siteConfig.EnableOIDCRegistration) {
+      try {
+        username = await autoRegisterOidcUser(userInfo, siteConfig);
+      } catch (error) {
+        console.error('OIDC自动注册失败:', error);
+      }
+    }
 
     if (username) {
       // 获取用户信息
