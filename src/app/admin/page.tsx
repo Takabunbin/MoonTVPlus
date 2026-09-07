@@ -80,6 +80,7 @@ import {
 import AnimeSubscriptionComponent from '@/components/AnimeSubscriptionComponent';
 import CorrectDialog from '@/components/CorrectDialog';
 import DataMigration from '@/components/DataMigration';
+import DeviceControlPanel from '@/components/admin/DeviceControlPanel';
 import PageLayout from '@/components/PageLayout';
 
 // 统一按钮样式系统
@@ -18117,6 +18118,7 @@ function AdminPageClient() {
   const [showResetConfigModal, setShowResetConfigModal] = useState(false);
   const [expandedTabs, setExpandedTabs] = useState<{ [key: string]: boolean }>({
     userConfig: false,
+    deviceControl: false,
     videoSource: false,
     sourceScriptLab: false,
     musicConfig: false,
@@ -18515,6 +18517,17 @@ function AdminPageClient() {
                 userSearch={userSearch}
                 setUserSearch={setUserSearch}
               />
+            </CollapsibleTab>
+
+            <CollapsibleTab
+              title='设备与播放限制'
+              icon={
+                <Monitor size={20} className='text-gray-600 dark:text-gray-400' />
+              }
+              isExpanded={expandedTabs.deviceControl}
+              onToggle={() => toggleTab('deviceControl')}
+            >
+              <DeviceControlPanel />
             </CollapsibleTab>
 
             {/* 视频源配置标签 */}

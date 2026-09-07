@@ -39,6 +39,9 @@ export interface RedisAdapter {
   zRange(key: string, start: number, stop: number): Promise<string[]>;
   zCard(key: string): Promise<number>;
   zRem(key: string, ...members: string[]): Promise<number>;
+
+  // Optional because only Redis/Kvrocks exposes this controlled atomic-script capability.
+  eval?(script: string, keys: string[], args: string[]): Promise<unknown>;
 }
 
 /**
@@ -142,6 +145,10 @@ export class StandardRedisAdapter implements RedisAdapter {
 
   async zRem(key: string, ...members: string[]): Promise<number> {
     return this.client.zRem(key, members);
+  }
+
+  async eval(script: string, keys: string[], args: string[]): Promise<unknown> {
+    return this.client.eval(script, { keys, arguments: args });
   }
 }
 

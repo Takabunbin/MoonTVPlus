@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { setDeviceIdCookie } from '@/lib/device-id';
+import { checkOidcDeviceApproval } from '@/lib/oidc-device-approval';
 import {
   generateRefreshToken,
   generateTokenId,
@@ -71,7 +73,8 @@ function getDeviceInfo(userAgent: string): string {
 async function generateAuthCookie(
   username: string,
   role: 'owner' | 'admin' | 'user',
-  deviceInfo: string
+  deviceInfo: string,
+  deviceId: string
 ): Promise<string> {
   const authData: any = { role };
 
@@ -102,6 +105,7 @@ async function generateAuthCookie(
     await storeRefreshToken(username, tokenId, {
       token: refreshToken,
       deviceInfo,
+      deviceId,
       createdAt: now,
       expiresAt: refreshExpires,
       lastUsed: now,
@@ -221,7 +225,18 @@ export async function POST(request: NextRequest) {
       const response = NextResponse.json({ ok: true, message: '注册成功' });
       const userAgent = request.headers.get('user-agent') || 'Unknown';
       const deviceInfo = getDeviceInfo(userAgent);
-      const cookieValue = await generateAuthCookie(username, 'user', deviceInfo);
+      const deviceCheck = await checkOidcDeviceApproval(
+        request,
+        username,
+        deviceInfo
+      );
+      const { deviceId } = deviceCheck;
+
+      if (deviceCheck.status !== 'approved') {
+        throw new Error('首次注册设备未能自动批准');
+      }
+
+      const cookieValue = await generateAuthCookie(username, 'user', deviceInfo, deviceId);
       const expires = new Date(Date.now() + TOKEN_CONFIG.REFRESH_TOKEN_AGE);
 
       response.cookies.set('auth', cookieValue, {
@@ -231,6 +246,8 @@ export async function POST(request: NextRequest) {
         httpOnly: false,
         secure: false,
       });
+
+      setDeviceIdCookie(response, deviceId);
 
       // 清除OIDC session
       response.cookies.delete('oidc_session');

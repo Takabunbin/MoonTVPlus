@@ -19,6 +19,7 @@ async function loadStorage() {
 interface TokenData {
   token: string;
   deviceInfo: string;
+  deviceId?: string;
   createdAt: number;
   expiresAt: number;
   lastUsed: number;
@@ -140,6 +141,7 @@ export async function revokeRefreshToken(
 export async function getUserDevices(username: string): Promise<Array<{
   tokenId: string;
   deviceInfo: string;
+  deviceId?: string;
   createdAt: number;
   lastUsed: number;
   expiresAt: number;
@@ -176,6 +178,7 @@ export async function getUserDevices(username: string): Promise<Array<{
         devices.push({
           tokenId,
           deviceInfo: tokenData.deviceInfo,
+          deviceId: tokenData.deviceId,
           createdAt: tokenData.createdAt,
           lastUsed: tokenData.lastUsed,
           expiresAt: tokenData.expiresAt,
@@ -190,6 +193,38 @@ export async function getUserDevices(username: string): Promise<Array<{
     console.error('Failed to get user devices:', error);
     return [];
   }
+}
+
+export async function revokeRefreshTokensByDeviceId(
+  username: string,
+  deviceId: string
+): Promise<string[]> {
+  const hashKey = `user_tokens:${username}`;
+  const storage = await loadStorage();
+
+  if (!storage || typeof (storage as any).adapter?.hGetAll !== 'function') {
+    return [];
+  }
+
+  const allTokens = await (storage as any).adapter.hGetAll(hashKey);
+  const tokenIds: string[] = [];
+  for (const [tokenId, dataStr] of Object.entries(allTokens || {})) {
+    try {
+      const tokenData: TokenData = JSON.parse(dataStr as string);
+      if (tokenData.deviceId === deviceId) tokenIds.push(tokenId);
+    } catch {
+      // Ignore malformed legacy records.
+    }
+  }
+
+  if (typeof (storage as any).adapter?.hDel !== 'function') {
+    throw new Error('当前存储后端不支持按设备撤销 Refresh Token');
+  }
+
+  await Promise.all(
+    tokenIds.map((tokenId) => (storage as any).adapter.hDel(hashKey, tokenId))
+  );
+  return tokenIds;
 }
 
 // 撤销所有 Token

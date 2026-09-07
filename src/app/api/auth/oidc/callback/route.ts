@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { setDeviceIdCookie } from '@/lib/device-id';
+import { checkOidcDeviceApproval } from '@/lib/oidc-device-approval';
 import {
   generateRefreshToken,
   generateTokenId,
@@ -71,7 +73,8 @@ function getDeviceInfo(userAgent: string): string {
 async function generateAuthCookie(
   username: string,
   role: 'owner' | 'admin' | 'user',
-  deviceInfo: string
+  deviceInfo: string,
+  deviceId: string
 ): Promise<string> {
   const authData: any = { role };
 
@@ -102,6 +105,7 @@ async function generateAuthCookie(
     await storeRefreshToken(username, tokenId, {
       token: refreshToken,
       deviceInfo,
+      deviceId,
       createdAt: now,
       expiresAt: refreshExpires,
       lastUsed: now,
@@ -230,11 +234,29 @@ export async function GET(request: NextRequest) {
     }
 
     if (username) {
-      // 用户已存在,直接登录
-      const response = NextResponse.redirect(new URL('/', origin));
       const userAgent = request.headers.get('user-agent') || 'Unknown';
       const deviceInfo = getDeviceInfo(userAgent);
-      const cookieValue = await generateAuthCookie(username, userRole, deviceInfo);
+      const deviceCheck = await checkOidcDeviceApproval(
+        request,
+        username,
+        deviceInfo
+      );
+      const { deviceId } = deviceCheck;
+
+      if (deviceCheck.status === 'pending') {
+        const pendingUrl = new URL('/device-pending', origin);
+        pendingUrl.searchParams.set('limitReached', deviceCheck.limitReached ? '1' : '0');
+
+        const response = NextResponse.redirect(pendingUrl);
+        response.cookies.delete('auth');
+        setDeviceIdCookie(response, deviceId);
+        response.cookies.delete('oidc_state');
+
+        return response;
+      }
+
+      const response = NextResponse.redirect(new URL('/', origin));
+      const cookieValue = await generateAuthCookie(username, userRole, deviceInfo, deviceId);
       const expires = new Date(Date.now() + TOKEN_CONFIG.REFRESH_TOKEN_AGE);
 
       response.cookies.set('auth', cookieValue, {
@@ -244,6 +266,8 @@ export async function GET(request: NextRequest) {
         httpOnly: false,
         secure: false,
       });
+
+      setDeviceIdCookie(response, deviceId);
 
       // 清除state cookie
       response.cookies.delete('oidc_state');
